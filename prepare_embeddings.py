@@ -245,10 +245,10 @@ def main(argv: Optional[List[str]] = None) -> None:
         raise ValueError("No valid rows to process after applying filters.")
 
     titles = filtered_df["title"].tolist()
-    provider = args.provider
+    provider = config.get("provider", args.provider)
     if provider == "sentence-transformers":
-        embeddings = embed_titles_local(config.get("model", args.model), titles)
         model_identifier = config.get("model", args.model)
+        embeddings = embed_titles_local(model_identifier, titles)
     else:
         gemini_model = config.get("gemini_model", args.gemini_model)
         gemini_key = args.gemini_api_key or config.get("gemini_api_key")

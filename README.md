@@ -5,15 +5,31 @@ This project processes a CSV of content titles (`title`, `group`) to generate em
 ## File Structure
 ````text
 .
-├── TitlesforL16HomeWork.csv      # Sample input file
-├── README.md                     # Project overview and usage instructions
-├── embeddings_clustering_prd.md  # Product requirements document
-├── requirements.txt              # Python dependencies
-├── prepare_embeddings.py         # Step 1: embed & normalize titles
-├── run_kmeans.py                 # Step 2: run K-Means and generate reports
-├── classify_title.py             # Step 3: classify titles via KNN
-├── visualize_clusters.py         # Optional: generate PCA scatter plots
-└── run_pipeline.py               # Orchestrates the full end-to-end flow
+├── TitlesforL16HomeWork.csv          # Sample input file
+├── new_titles.csv                    # Sample batch titles for classification
+├── README.md                         # Project overview and usage instructions
+├── embeddings_clustering_prd.md      # Product requirements document
+├── requirements.txt                  # Python dependencies
+├── config/
+│   └── embedding.example.json        # Sample config (copy to embedding.json for local secrets)
+├── Images/                           # Reference visuals used in this README
+│   ├── Input file.png
+│   ├── embedding_plot.png
+│   ├── K-Means clustering results.png
+│   ├── KNN cluster allocation result.png
+│   └── New title input file.png
+├── pipeline_output/                  # Generated artifacts (after running the pipeline)
+│   ├── embeddings.parquet
+│   ├── embeddings.manifest.json
+│   ├── clustering_results.csv
+│   ├── kmeans_report.md
+│   ├── centroids.json
+│   └── batch_predictions.csv
+├── prepare_embeddings.py             # Step 1: embed & normalize titles
+├── run_kmeans.py                     # Step 2: run K-Means and generate reports
+├── classify_title.py                 # Step 3: classify titles via KNN
+├── visualize_clusters.py             # Optional: generate PCA scatter plots
+└── run_pipeline.py                   # Orchestrates the full end-to-end flow
 ````
 
 ## Prerequisites
@@ -30,6 +46,7 @@ pip install -r requirements.txt
 ## Quick Start (Orchestrated Pipeline)
 `run_pipeline.py` ties all scripts together. It prepares embeddings, runs K-Means, and optionally classifies a batch of new titles.
 
+### Local embeddings (SentenceTransformers)
 ```bash
 python run_pipeline.py \
   --input TitlesforL16HomeWork.csv \
@@ -37,7 +54,27 @@ python run_pipeline.py \
   --format parquet \
   --embedding-provider sentence-transformers \
   --embedding-model sentence-transformers/all-MiniLM-L6-v2 \
-  --config config/embedding.json \  # optional shared config
+  --k 3 \
+  --batch new_titles.csv \
+  --visualize
+```
+
+### Gemini embeddings (via config file)
+Populate `config/embedding.json` (copied from `config/embedding.example.json`) with:
+```json
+{
+  "provider": "gemini",
+  "gemini_model": "models/text-embedding-004",
+  "gemini_api_key": "YOUR_KEY_HERE"
+}
+```
+Then run:
+```bash
+python run_pipeline.py \
+  --input TitlesforL16HomeWork.csv \
+  --output-dir pipeline_output \
+  --format parquet \
+  --config config/embedding.json \
   --k 3 \
   --batch new_titles.csv \
   --visualize
@@ -53,22 +90,27 @@ Outputs (within `pipeline_output/` by default):
 
 Flags `--batch`, `--visualize`, and `--embedding-model` are optional; omit them if you do not need batch classification, a visualization, or a custom model override. Use `--visualize-output` to customize the image path.
 
-Switch to Gemini embeddings by replacing the provider flags, for example:
-
-```bash
-python run_pipeline.py \
-  --input TitlesforL16HomeWork.csv \
-  --output-dir pipeline_output \
-  --format parquet \
-  --embedding-provider gemini \
-  --gemini-model models/text-embedding-004 \
-  --gemini-api-key "$GEMINI_API_KEY" \
-  --k 3 \
-  --batch new_titles.csv \
-  --visualize
-```
-
 If `--batch` is omitted, the pipeline skips classification and reminds you how to run the interactive classifier manually.
+
+## Workflow Overview
+```text
+Source CSV (title, group)
+      │
+      ▼
+prepare_embeddings.py
+      │  └─ outputs embeddings.parquet + embeddings.manifest.json
+      ▼
+run_kmeans.py
+      │  ├─ clustering_results.csv
+      │  ├─ kmeans_report.md
+      │  └─ centroids.json
+      │
+      ├────────────────────────► visualize_clusters.py (optional)
+      │                                └─ embedding_plot.png
+      │
+      └────────────────────────► classify_title.py (optional)
+                                   └─ batch_predictions.csv
+```
 
 ## Example Outputs
 - Input snapshot:  

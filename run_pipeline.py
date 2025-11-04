@@ -5,11 +5,12 @@ Convenience orchestrator that runs the full embedding → clustering → classif
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import subprocess
 import sys
 from pathlib import Path
-from typing import List
+from typing import Any, Dict, List, Optional
 
 
 def parse_args() -> argparse.Namespace:
@@ -83,6 +84,16 @@ def configure_logging(level: str) -> None:
     )
 
 
+def load_config(path: Optional[str]) -> Dict[str, Any]:
+    if not path:
+        return {}
+    config_path = Path(path)
+    if not config_path.exists():
+        raise FileNotFoundError(f"Config file not found: {config_path}")
+    with config_path.open("r", encoding="utf-8") as fh:
+        return json.load(fh)
+
+
 def run_command(cmd: List[str]) -> None:
     logging.info("Running: %s", " ".join(cmd))
     subprocess.run(cmd, check=True)
@@ -91,6 +102,7 @@ def run_command(cmd: List[str]) -> None:
 def main() -> None:
     args = parse_args()
     configure_logging(args.log_level)
+    config = load_config(args.config)
 
     base_dir = Path(__file__).resolve().parent
     output_dir = Path(args.output_dir).resolve()
@@ -101,6 +113,11 @@ def main() -> None:
 
     prepared_dataset = embeddings_base.with_suffix(f".{args.format}")
     manifest_path = embeddings_base.with_suffix(".manifest.json")
+
+    provider = config.get("provider", args.embedding_provider)
+    embedding_model = config.get("model", args.embedding_model)
+    gemini_model = config.get("gemini_model", args.gemini_model)
+    gemini_api_key = config.get("gemini_api_key", args.gemini_api_key)
 
     # Step 1: Prepare embeddings
     prepare_cmd = [
@@ -113,18 +130,18 @@ def main() -> None:
         "--format",
         args.format,
         "--provider",
-        args.embedding_provider,
+        provider,
     ]
     if args.config:
         prepare_cmd.extend(["--config", args.config])
-    if args.embedding_provider == "sentence-transformers":
-        if args.embedding_model:
-            prepare_cmd.extend(["--model", args.embedding_model])
+    if provider == "sentence-transformers":
+        if embedding_model:
+            prepare_cmd.extend(["--model", embedding_model])
     else:
-        if args.gemini_model:
-            prepare_cmd.extend(["--gemini-model", args.gemini_model])
-        if args.gemini_api_key:
-            prepare_cmd.extend(["--gemini-api-key", args.gemini_api_key])
+        if gemini_model:
+            prepare_cmd.extend(["--gemini-model", gemini_model])
+        if gemini_api_key:
+            prepare_cmd.extend(["--gemini-api-key", gemini_api_key])
     run_command(prepare_cmd)
 
     # Resolve dataset path after format selection
@@ -168,18 +185,18 @@ def main() -> None:
             "--output",
             str(predictions_path),
             "--provider",
-            args.embedding_provider,
+            provider,
         ]
         if args.config:
             classify_cmd.extend(["--config", args.config])
-        if args.embedding_provider == "sentence-transformers":
-            if args.embedding_model:
-                classify_cmd.extend(["--model", args.embedding_model])
+        if provider == "sentence-transformers":
+            if embedding_model:
+                classify_cmd.extend(["--model", embedding_model])
         else:
-            if args.gemini_model:
-                classify_cmd.extend(["--gemini-model", args.gemini_model])
-            if args.gemini_api_key:
-                classify_cmd.extend(["--gemini-api-key", args.gemini_api_key])
+            if gemini_model:
+                classify_cmd.extend(["--gemini-model", gemini_model])
+            if gemini_api_key:
+                classify_cmd.extend(["--gemini-api-key", gemini_api_key])
         if manifest_path.exists():
             classify_cmd.extend(["--manifest", str(manifest_path)])
         run_command(classify_cmd)
