@@ -20,6 +20,9 @@ myenv/
 *.parquet
 *.jsonl
 
+# Local config secrets
+config/embedding.json
+
 # Editors
 .idea/
 .vscode/

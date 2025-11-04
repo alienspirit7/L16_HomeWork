@@ -70,6 +70,18 @@ python run_pipeline.py \
 
 If `--batch` is omitted, the pipeline skips classification and reminds you how to run the interactive classifier manually.
 
+## Example Outputs
+- Input snapshot:  
+  ![Input CSV sample](Images/Input%20file.png)
+- Pipeline-generated visualization (colors = K-Means clusters, shapes = original groups):  
+  ![Embedding PCA scatter](Images/embedding_plot.png)
+- Cluster reporting excerpt:  
+  ![K-Means clustering table](Images/K-Means%20clustering%20results.png)
+- Batch classification summary:  
+  ![KNN classification results](Images/KNN%20cluster%20allocation%20result.png)
+- New title batch input example:  
+  ![New titles CSV sample](Images/New%20title%20input%20file.png)
+
 ## Script-by-Script Usage
 
 ### 1. Generate Embeddings
