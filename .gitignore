@@ -1,0 +1,27 @@
+# Python artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.ruff_cache/
+.pytest_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+myenv/
+
+# macOS noise
+.DS_Store
+
+# Project outputs
+pipeline_output/
+pipeline_output/**
+*.manifest.json
+*.parquet
+*.jsonl
+
+# Editors
+.idea/
+.vscode/
