@@ -16,8 +16,6 @@ myenv/
 .DS_Store
 
 # Project outputs
-pipeline_output/
-pipeline_output/**
 *.manifest.json
 *.parquet
 *.jsonl

@@ -7,18 +7,25 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
-from sentence_transformers import SentenceTransformer
 from sklearn.neighbors import NearestNeighbors
 
+try:
+    from sentence_transformers import SentenceTransformer
+except ImportError:  # pragma: no cover - optional dependency when using Gemini only
+    SentenceTransformer = None
 
-DEFAULT_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+
+DEFAULT_PROVIDER = "sentence-transformers"
+DEFAULT_LOCAL_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+DEFAULT_GEMINI_MODEL = "models/text-embedding-004"
 
 
 @dataclass
@@ -35,7 +42,27 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     )
     parser.add_argument("--assignments", required=True, help="Record-level clustering output from run_kmeans.py.")
     parser.add_argument("--k", type=int, default=3, help="Number of neighbors for KNN voting (default 3).")
-    parser.add_argument("--model", help="Override embedding model identifier. Defaults to manifest or MiniLM.")
+    parser.add_argument(
+        "--provider",
+        choices=["sentence-transformers", "gemini"],
+        help="Embedding provider override. Defaults to manifest provider or sentence-transformers.",
+    )
+    parser.add_argument(
+        "--model",
+        help="Embedding model identifier for sentence-transformers provider.",
+    )
+    parser.add_argument(
+        "--gemini-model",
+        help="Embedding model identifier for Gemini provider.",
+    )
+    parser.add_argument(
+        "--gemini-api-key",
+        help="Gemini API key. Falls back to GEMINI_API_KEY environment variable.",
+    )
+    parser.add_argument(
+        "--config",
+        help="Optional path to JSON config file with defaults (e.g., Gemini API key).",
+    )
     parser.add_argument("--batch", help="Optional CSV/JSONL with column 'title' for batch classification.")
     parser.add_argument("--output", help="Optional path to write batch predictions (CSV).")
     parser.add_argument("--manifest", help="Manifest JSON path from prepare_embeddings.py for metadata.")
@@ -48,6 +75,16 @@ def configure_logging(level: str) -> None:
         level=getattr(logging, level.upper()),
         format="%(asctime)s %(levelname)s %(message)s",
     )
+
+
+def load_config(path: Optional[str]) -> Dict[str, Any]:
+    if not path:
+        return {}
+    config_path = Path(path)
+    if not config_path.exists():
+        raise FileNotFoundError(f"Config file not found: {config_path}")
+    with config_path.open("r", encoding="utf-8") as fh:
+        return json.load(fh)
 
 
 def load_assignments(path: Path) -> pd.DataFrame:
@@ -86,7 +123,16 @@ def ensure_vector_list(value: Any) -> List[float]:
         except json.JSONDecodeError:
             from ast import literal_eval
 
-            parsed = literal_eval(value)
+            try:
+                parsed = literal_eval(value)
+            except (SyntaxError, ValueError):
+                stripped = value.strip()
+                if stripped.startswith("[") and stripped.endswith("]"):
+                    inner = stripped[1:-1]
+                    parts = [part for part in inner.replace("\n", " ").split(" ") if part]
+                    if parts:
+                        return [float(part) for part in parts]
+                raise
         if not isinstance(parsed, (list, tuple)):
             raise ValueError(f"Expected list-like string, got {type(parsed)}")
         return [float(v) for v in parsed]
@@ -122,17 +168,77 @@ def load_manifest(assignments_path: Path, manifest_override: Optional[Path]) -> 
     return None
 
 
-def resolve_model_id(args_model: Optional[str], manifest: Optional[Dict[str, Any]]) -> str:
-    if args_model:
-        return args_model
-    if manifest and manifest.get("model_id"):
-        return manifest["model_id"]
-    return DEFAULT_MODEL
+def resolve_provider(args_provider: Optional[str], manifest: Optional[Dict[str, Any]]) -> str:
+    if args_provider:
+        return args_provider
+    if manifest and manifest.get("provider"):
+        return manifest["provider"]
+    return DEFAULT_PROVIDER
 
 
-def load_model(model_id: str) -> SentenceTransformer:
-    logging.info("Loading model %s", model_id)
-    return SentenceTransformer(model_id)
+def resolve_model_identifier(
+    provider: str,
+    args_model: Optional[str],
+    args_gemini_model: Optional[str],
+    manifest: Optional[Dict[str, Any]],
+) -> str:
+    manifest_model = manifest.get("model_id") if manifest else None
+    if provider == "sentence-transformers":
+        if args_model:
+            return args_model
+        if manifest_model:
+            return manifest_model
+        return DEFAULT_LOCAL_MODEL
+    if provider == "gemini":
+        if args_gemini_model:
+            return args_gemini_model
+        if manifest_model:
+            return manifest_model
+        return DEFAULT_GEMINI_MODEL
+    raise ValueError(f"Unsupported provider: {provider}")
+
+
+def build_embedding_function(
+    provider: str,
+    model_id: str,
+    gemini_api_key: Optional[str],
+) -> Callable[[List[str]], np.ndarray]:
+    if provider == "sentence-transformers":
+        if SentenceTransformer is None:
+            raise ImportError("sentence-transformers package is required for provider=sentence-transformers.")
+        logging.info("Loading model %s", model_id)
+        model = SentenceTransformer(model_id)
+
+        def encode(titles: List[str]) -> np.ndarray:
+            embeddings = model.encode(titles, convert_to_numpy=True, show_progress_bar=len(titles) > 10)
+            return normalize_vectors(embeddings)
+
+        return encode
+
+    if provider == "gemini":
+        api_key = gemini_api_key or os.environ.get("GEMINI_API_KEY")
+        if not api_key:
+            raise ValueError("Gemini API key not provided. Supply --gemini-api-key or set GEMINI_API_KEY.")
+        try:
+            import google.generativeai as genai
+        except ImportError as exc:  # pragma: no cover
+            raise ImportError("google-generativeai package is required for provider=gemini.") from exc
+
+        genai.configure(api_key=api_key)
+
+        def encode(titles: List[str]) -> np.ndarray:
+            embeddings: List[List[float]] = []
+            for title in titles:
+                response = genai.embed_content(model=model_id, content=title)
+                vector = response.get("embedding")
+                if vector is None:
+                    raise ValueError("Gemini response missing 'embedding' field.")
+                embeddings.append(vector)
+            return normalize_vectors(np.asarray(embeddings, dtype=float))
+
+        return encode
+
+    raise ValueError(f"Unsupported provider: {provider}")
 
 
 def build_index(vectors: np.ndarray, metric: str = "cosine") -> NearestNeighbors:
@@ -185,13 +291,8 @@ def predict_cluster(
     return winner, confidence, neighbors
 
 
-def embed_titles(model: SentenceTransformer, titles: List[str]) -> np.ndarray:
-    embeddings = model.encode(titles, convert_to_numpy=True, show_progress_bar=len(titles) > 10)
-    return normalize_vectors(embeddings)
-
-
 def classify_interactive(
-    model: SentenceTransformer,
+    embed_fn: Callable[[List[str]], np.ndarray],
     index: NearestNeighbors,
     base_vectors: np.ndarray,
     clusters: np.ndarray,
@@ -208,7 +309,7 @@ def classify_interactive(
             break
         if not user_input:
             break
-        embedded = embed_titles(model, [user_input])[0]
+        embedded = embed_fn([user_input])[0]
         winner, confidence, neighbors = predict_cluster(
             user_input,
             embedded,
@@ -277,15 +378,23 @@ def main(argv: Optional[List[str]] = None) -> None:
         logging.warning("Requested k=%d exceeds dataset size; using k=%d", args.k, len(assignments))
 
     manifest = load_manifest(assignments_path, Path(args.manifest) if args.manifest else None)
-    model_id = resolve_model_id(args.model, manifest)
-    model = load_model(model_id)
+    config = load_config(args.config)
+    provider = resolve_provider(args.provider or config.get("provider"), manifest)
+    model_id = resolve_model_identifier(
+        provider,
+        args.model or config.get("model"),
+        args.gemini_model or config.get("gemini_model"),
+        manifest,
+    )
+    logging.info("Using provider=%s model=%s", provider, model_id)
+    embed_fn = build_embedding_function(provider, model_id, args.gemini_api_key or config.get("gemini_api_key"))
 
     index = build_index(base_vectors)
 
     if args.batch:
         batch_titles = load_batch_titles(Path(args.batch))
         logging.info("Classifying %d titles (batch mode)", len(batch_titles))
-        embedded = embed_titles(model, batch_titles)
+        embedded = embed_fn(batch_titles)
         rows: List[Dict[str, Any]] = []
         for title, vec in zip(batch_titles, embedded):
             cluster_id, confidence, neighbors = predict_cluster(
@@ -305,7 +414,10 @@ def main(argv: Optional[List[str]] = None) -> None:
                     "confidence": round(confidence, 4),
                     "nearest_titles": "; ".join(n.title for n in neighbors[:args.k]),
                     "nearest_original_groups": "; ".join(n.original_group for n in neighbors[:args.k]),
-                    "nearest_distances": "; ".join(f"{n.distance:.4f}" for n in neighbors[:args.k]),
+                    "nearest_clusters": "; ".join(str(n.cluster_id) for n in neighbors[:args.k]),
+                    "nearest_cluster_distances": "; ".join(
+                        f"{n.cluster_id}:{n.distance:.4f}" for n in neighbors[:args.k]
+                    ),
                 }
             )
         if args.output:
@@ -321,7 +433,7 @@ def main(argv: Optional[List[str]] = None) -> None:
                 )
     else:
         classify_interactive(
-            model,
+            embed_fn,
             index,
             base_vectors,
             clusters,

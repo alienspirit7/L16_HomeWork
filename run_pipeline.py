@@ -27,6 +27,28 @@ def parse_args() -> argparse.Namespace:
         help="Format for the prepared embeddings dataset.",
     )
     parser.add_argument(
+        "--embedding-provider",
+        choices=["sentence-transformers", "gemini"],
+        default="sentence-transformers",
+        help="Embedding provider passed to prepare_embeddings.py and classify_title.py.",
+    )
+    parser.add_argument(
+        "--embedding-model",
+        help="Model identifier for sentence-transformers provider.",
+    )
+    parser.add_argument(
+        "--gemini-model",
+        help="Gemini embedding model identifier.",
+    )
+    parser.add_argument(
+        "--gemini-api-key",
+        help="Gemini API key (falls back to GEMINI_API_KEY environment variable).",
+    )
+    parser.add_argument(
+        "--config",
+        help="Optional JSON config file shared across embedding/classification steps.",
+    )
+    parser.add_argument(
         "--k",
         type=int,
         default=3,
@@ -35,6 +57,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--batch",
         help="Optional CSV/JSONL of titles to classify after clustering (must include 'title' column).",
+    )
+    parser.add_argument(
+        "--visualize",
+        action="store_true",
+        help="Generate a 2D visualization of embeddings colored by original group.",
+    )
+    parser.add_argument(
+        "--visualize-output",
+        help="Override path for visualization PNG (defaults to <output-dir>/embedding_plot.png).",
     )
     parser.add_argument(
         "--log-level",
@@ -81,7 +112,19 @@ def main() -> None:
         str(embeddings_base),
         "--format",
         args.format,
+        "--provider",
+        args.embedding_provider,
     ]
+    if args.config:
+        prepare_cmd.extend(["--config", args.config])
+    if args.embedding_provider == "sentence-transformers":
+        if args.embedding_model:
+            prepare_cmd.extend(["--model", args.embedding_model])
+    else:
+        if args.gemini_model:
+            prepare_cmd.extend(["--gemini-model", args.gemini_model])
+        if args.gemini_api_key:
+            prepare_cmd.extend(["--gemini-api-key", args.gemini_api_key])
     run_command(prepare_cmd)
 
     # Resolve dataset path after format selection
@@ -124,13 +167,42 @@ def main() -> None:
             str(Path(args.batch).resolve()),
             "--output",
             str(predictions_path),
+            "--provider",
+            args.embedding_provider,
         ]
+        if args.config:
+            classify_cmd.extend(["--config", args.config])
+        if args.embedding_provider == "sentence-transformers":
+            if args.embedding_model:
+                classify_cmd.extend(["--model", args.embedding_model])
+        else:
+            if args.gemini_model:
+                classify_cmd.extend(["--gemini-model", args.gemini_model])
+            if args.gemini_api_key:
+                classify_cmd.extend(["--gemini-api-key", args.gemini_api_key])
         if manifest_path.exists():
             classify_cmd.extend(["--manifest", str(manifest_path)])
         run_command(classify_cmd)
         logging.info("Batch predictions written to %s", predictions_path)
     else:
         logging.info("Batch file not provided; skip classification step. Run classify_title.py manually for interactive mode.")
+
+    if args.visualize:
+        visualize_path = Path(args.visualize_output).resolve() if args.visualize_output else output_dir / "embedding_plot.png"
+        visualize_cmd = [
+            sys.executable,
+            str(base_dir / "visualize_clusters.py"),
+            "--data",
+            str(dataset_path),
+            "--assignments",
+            str(clustering_output),
+            "--output",
+            str(visualize_path),
+            "--title",
+            f"Embeddings by Group (k={args.k})",
+        ]
+        run_command(visualize_cmd)
+        logging.info("Visualization saved to %s", visualize_path)
 
     logging.info("Pipeline completed. Artifacts stored in %s", output_dir)
 

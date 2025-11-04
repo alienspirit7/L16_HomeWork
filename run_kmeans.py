@@ -93,7 +93,16 @@ def ensure_vector_list(value: Any) -> List[float]:
         except json.JSONDecodeError:
             from ast import literal_eval
 
-            parsed = literal_eval(value)
+            try:
+                parsed = literal_eval(value)
+            except (SyntaxError, ValueError):
+                stripped = value.strip()
+                if stripped.startswith("[") and stripped.endswith("]"):
+                    inner = stripped[1:-1]
+                    parts = [part for part in inner.replace("\n", " ").split(" ") if part]
+                    if parts:
+                        return [float(part) for part in parts]
+                raise
         if not isinstance(parsed, (list, tuple)):
             raise ValueError(f"Expected list-like string, got {type(parsed)}")
         return [float(v) for v in parsed]
@@ -160,6 +169,15 @@ def save_record_level(
     path = path.resolve()
     path.parent.mkdir(parents=True, exist_ok=True)
     result = df.copy()
+
+    def serialize_column(value: Any) -> str:
+        vector = ensure_vector_list(value)
+        return json.dumps(vector)
+
+    if "embedding" in result.columns:
+        result["embedding"] = result["embedding"].apply(serialize_column)
+    if "normalized_embedding" in result.columns:
+        result["normalized_embedding"] = result["normalized_embedding"].apply(serialize_column)
     result["cluster_id"] = assignments.astype(int)
     result["distance_to_centroid"] = distances.astype(float)
     result.to_csv(path, index=False)

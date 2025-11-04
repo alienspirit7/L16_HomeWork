@@ -1,0 +1,5 @@
+{
+  "provider": "gemini",
+  "gemini_model": "models/text-embedding-004",
+  "gemini_api_key": "REPLACE_WITH_KEY"
+}
