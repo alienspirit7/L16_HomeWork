@@ -113,16 +113,26 @@ run_kmeans.py
 ```
 
 ## Example Outputs
-- Input snapshot:  
+- Input data snapshot  
   ![Input CSV sample](Images/Input%20file.png)
-- Pipeline-generated visualization (colors = K-Means clusters, shapes = original groups):  
-  ![Embedding PCA scatter](Images/embedding_plot.png)
-- Cluster reporting excerpt:  
-  ![K-Means clustering table](Images/K-Means%20clustering%20results.png)
-- Batch classification summary:  
-  ![KNN classification results](Images/KNN%20cluster%20allocation%20result.png)
-- New title batch input example:  
+- Batch titles template  
   ![New titles CSV sample](Images/New%20title%20input%20file.png)
+
+### Regular (SentenceTransformer) Embeddings
+- PCA scatter (colors = K-Means clusters, shapes = original groups)  
+  ![Regular embedding PCA](Images/Regular%20model%20embedding_plot.png)
+- K-Means clustering report excerpt  
+  ![Regular K-Means results](Images/Regiular%20Model%20K-Means%20clustering%20results.png)
+- KNN classification summary  
+  ![Regular KNN allocation](Images/Regular%20Embedding%20model%20KNN%20cluster%20allocation%20result.png)
+
+### Gemini Embeddings
+- PCA scatter (colors = K-Means clusters, shapes = original groups)  
+  ![Gemini embedding PCA](Images/Gemini%20embedding_plot.png)
+- K-Means clustering report excerpt  
+  ![Gemini K-Means results](Images/Gemini%20based%20embedding%20and%20K-Means%20clustering%20results.png)
+- KNN classification summary  
+  ![Gemini KNN allocation](Images/Gemini%20Embedding%20new%20title%20allocation.png)
 
 ## Script-by-Script Usage
 
