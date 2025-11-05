@@ -24,6 +24,9 @@
 21. “Update PromptsUsed file again with all the actual prompts from this ssession (quote them)”  
 22. “Add .md file with results analysis that will go through the example we did and summarise how K-Means made mistakes and allocated some title to a wrong groups (especially when regular model was used for embeddings). discuss why such mistakes could happen. Will compare the 2 embeddings models and underline good and bad sides of each model usage. Define how K-Means dependent on the model chosen for embeddings. Discuss why even though the gemini model was much more accurate, why the result of the tested new title allocation to cluster wasn't good.”  
 23. “Check all the images in the Images folder again and review Readme and incorporate all the images there” *(repeat instruction for completeness)*.  
+24. “Gemini didn't identify messi title correctly. It was defined as Women Soccer instead. Please correct”  
+25. “Add to lessons and recommendations that having more titles in training set can help with future titles classifications”  
+26. “Update prompts file with recent prompts added”  
 
 ## Work Summary
 - Authored a comprehensive PRD covering SentenceTransformer and Gemini embedding paths, reporting, classification, visualization, and orchestration requirements.  

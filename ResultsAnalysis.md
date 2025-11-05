@@ -62,6 +62,7 @@ K-Means clustering quality is tightly coupled to the embedding manifold. Better 
    - Consider distance-threshold rejection for low-confidence predictions.
 3. **Leverage cluster summaries:** Export centroid keywords (e.g., via PCA loadings or top TF-IDF tokens) to interpret why neighbours sway decisions.
 4. **Hybrid approach:** Use Gemini for primary embeddings when connectivity is available; fall back to SentenceTransformer offline, but adjust post-processing (e.g., manual rules for certain leagues) to catch known failure modes.
-5. **Monitor new-title outcomes:** store predicted clusters and nearest neighbours for review, flagging cases where confidence < 0.7 or where neighbour labels disagree to prompt manual checks.
+5. **Data enrichment:** Continue expanding the training corpus—especially transfer-focused and MLS-specific titles—so future embeddings have richer neighbour contexts for borderline cases.
+6. **Monitor new-title outcomes:** store predicted clusters and nearest neighbours for review, flagging cases where confidence < 0.7 or where neighbour labels disagree to prompt manual checks.
 
 Overall, Gemini embeddings yield superior cluster separation, but KNN classification accuracy remains contingent on balanced, representative training data. The Messi title misclassification under Gemini highlights that even a high-fidelity embedding space cannot compensate for skewed nearest neighbours. Improving data coverage or adjusting voting logic (e.g., reweighting votes, enriching the transfers cohort) is essential to translate embedding quality into correct real-world routing for new content.
