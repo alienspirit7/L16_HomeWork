@@ -1,0 +1,90 @@
+{
+  "data_preparation": [
+    {
+      "task": "Generate embeddings (SentenceTransformer)",
+      "details": "Create raw + normalized embeddings using the default local model with manifest output.",
+      "cli_example": "python prepare_embeddings.py --input TitlesforL16HomeWork.csv --output pipeline_output/embeddings --format parquet --provider sentence-transformers --model sentence-transformers/all-MiniLM-L6-v2 --log-level info"
+    },
+    {
+      "task": "Generate embeddings (Gemini)",
+      "details": "Use Google Gemini embeddings via JSON config or CLI-provided API key.",
+      "cli_example": "python prepare_embeddings.py --input TitlesforL16HomeWork.csv --output pipeline_output/embeddings --format parquet --provider gemini --gemini-model models/text-embedding-004 --config config/embedding.json --log-level info"
+    }
+  ],
+  "clustering": [
+    {
+      "task": "Run K-Means clustering",
+      "details": "Cluster normalized embeddings, export record-level assignments, reports, and centroids.",
+      "cli_example": "python run_kmeans.py --data pipeline_output/embeddings.parquet --output pipeline_output/clustering_results.csv --report pipeline_output/kmeans_report.md --centroids pipeline_output/centroids.json --k 3 --seed 42"
+    }
+  ],
+  "classification": [
+    {
+      "task": "Interactive classification",
+      "details": "Embed ad-hoc titles and predict clusters using cosine KNN.",
+      "cli_example": "python classify_title.py --assignments pipeline_output/clustering_results.csv --k 3 --config config/embedding.json"
+    },
+    {
+      "task": "Batch classification",
+      "details": "Classify titles from CSV/JSONL in batch mode and emit nearest neighbour metadata.",
+      "cli_example": "python classify_title.py --assignments pipeline_output/clustering_results.csv --batch new_titles.csv --output pipeline_output/batch_predictions.csv --config config/embedding.json --k 3"
+    }
+  ],
+  "visualization": [
+    {
+      "task": "PCA scatter plot",
+      "details": "Plot embeddings with colors mapped to K-Means clusters and shapes to original groups.",
+      "cli_example": "python visualize_clusters.py --data pipeline_output/embeddings.parquet --assignments pipeline_output/clustering_results.csv --output pipeline_output/embedding_plot.png --title \"Embeddings by Group\" --alpha 0.8"
+    }
+  ],
+  "orchestration": [
+    {
+      "task": "Full pipeline (SentenceTransformer)",
+      "details": "Run embedding → clustering → optional batch classification and visualization with local model.",
+      "cli_example": "python run_pipeline.py --input TitlesforL16HomeWork.csv --output-dir pipeline_output --format parquet --embedding-provider sentence-transformers --embedding-model sentence-transformers/all-MiniLM-L6-v2 --k 3 --batch new_titles.csv --visualize"
+    },
+    {
+      "task": "Full pipeline (Gemini via config)",
+      "details": "Use config-driven Gemini embeddings end-to-end.",
+      "cli_example": "python run_pipeline.py --input TitlesforL16HomeWork.csv --output-dir pipeline_output --format parquet --config config/embedding.json --k 3 --batch new_titles.csv --visualize"
+    }
+  ],
+  "documentation_and_analysis": [
+    {
+      "task": "Update README & visuals",
+      "details": "Ensure workflow schema, setup instructions, and comparison plots remain current after changes."
+    },
+    {
+      "task": "Maintain ResultsAnalysis.md",
+      "details": "Review clustering accuracy, misclassifications, and embedding model comparisons after each dataset refresh."
+    },
+    {
+      "task": "Record prompts & decisions",
+      "details": "Update PromptsUsed.md with major requests and solutions for traceability."
+    }
+  ],
+  "testing_and_quality": [
+    {
+      "task": "Unit testing",
+      "details": "Implement tests for CSV validation, normalization, K-Means parameter handling, and KNN vote logic."
+    },
+    {
+      "task": "Integration testing",
+      "details": "Exercise the full pipeline on sample data to verify deterministic outputs (with fixed seed)."
+    }
+  ],
+  "next_steps": [
+    {
+      "task": "Expand dataset coverage",
+      "details": "Add more transfer-focused titles (especially MLS) to balance KNN neighbours."
+    },
+    {
+      "task": "Experiment with KNN tuning",
+      "details": "Evaluate alternative k values, distance weighting, or rejection thresholds for low-confidence predictions."
+    },
+    {
+      "task": "CI/CD integration",
+      "details": "Automate linting, testing, and pipeline smoke tests once repo stabilizes."
+    }
+  ]
+}

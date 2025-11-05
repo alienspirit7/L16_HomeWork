@@ -28,13 +28,14 @@ Both flows produced normalized embeddings, K-Means cluster allocations (`k=3`), 
 - **Why Gemini helps:** larger embedding space captures richer semantic relations (club names, league acronyms, player references) and better differentiates women’s football from NBA jargon, so centroids align with the intended topics.
 - **Dependencies:** requires `google-generativeai` and a valid API key; runs are cloud-dependent and slower due to network latency.
 
-**However, new-title classification still struggled:**
+**However, new-title classification diverged:**
 
-- The hold-out Messi headline aligns with *Soccer Transfers* in both embedding runs (SentenceTransformer and Gemini) because one of the nearest neighbours is a transfer article (“Barcelona’s Potential Lewandowski Replacement Wants Transfer ‘Finalized’ in January”), so the vote favours cluster `0`.  
-- **Residual risk:** the other two neighbours are Women Soccer headlines with similar “star/record move” language, meaning any small shift (different `k`, added data, or altered normalization) could tip the result toward the wrong class. The example highlights how fragile KNN can be when clusters have overlapping semantics and imbalanced counts.  
+- Using SentenceTransformer embeddings, the Messi headline is correctly routed to *Soccer Transfers* because one of the nearest neighbours is a transfer article (“Barcelona’s Potential Lewandowski Replacement Wants Transfer ‘Finalized’ in January”), giving cluster `0` the majority vote.
+- With Gemini embeddings, the same headline was pulled into the *Women Soccer* cluster despite sharper overall separation. Two of the closest neighbours are women’s soccer stories (“USWNT Icon Christen Press…” and “Alyssa Thompson…”) whose language (“star”, “record-breaking move”) dominates the vote, overwhelming the lone transfers neighbour.
+- **Why Gemini still misses:** KNN only considers local neighbours. Even though the Gemini manifold separates clusters cleanly at a global level, sparse representation of MLS/men’s transfer headlines means nearest neighbours remain women’s soccer articles, leading to misclassification.
 - **Additional factors:**  
-  - The transfers cluster remains the smallest segment; adding more MLS or men’s transfer stories would solidify its centroid.  
-  - With `k=3`, a future dataset update might deliver two women’s soccer neighbours, causing a misclassification even though the embeddings themselves are high quality.
+  - The transfers cluster is the smallest cohort; more diverse transfer headlines would strengthen its centroid and neighbour pool.  
+  - The default `k=3` and equal weighting make the prediction susceptible to class imbalance—two women’s articles can outvote one transfer article even with higher-quality embeddings.
 
 ---
 
@@ -45,7 +46,7 @@ Both flows produced normalized embeddings, K-Means cluster allocations (`k=3`), 
 | **Availability** | Offline, no API key required | Requires network + `google-generativeai` + API key |
 | **Embedding Dimensionality** | 384 | 3072 |
 | **K-Means Alignment** | Small mismatch (1/30) due to lexical overlap | Near-perfect cluster alignment in sample runs |
-| **KNN New Title** | Correctly assigns Messi headline to *Soccer Transfers* (confidence 0.67) | Also assigns Messi headline to *Soccer Transfers* (confidence 0.67), but neighbours include Women Soccer titles |
+| **KNN New Title** | Correctly assigns Messi headline to *Soccer Transfers* (confidence 0.67) | Misclassifies Messi headline to *Women Soccer* (confidence 0.67) due to neighbour imbalance |
 | **Runtime** | Fast, lightweight | Slower per request, subject to API rate limits |
 | **Explainability** | Easier to reason about drift (lexical) | Higher semantic nuance but harder to debug without centroid introspection |
 
