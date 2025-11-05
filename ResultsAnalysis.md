@@ -12,20 +12,19 @@ Both flows produced normalized embeddings, K-Means cluster allocations (`k=3`), 
 
 ## 1. K-Means Behaviour with SentenceTransformer Embeddings
 
-- **Mismatch rate:** 1/30 titles (3.3%) disagreed with their original label.  
-  - The outlier (`"‘A Calculated Risk’: New Angel City Star Nealy Martin Signs with WSL Giants"`) belongs to *Women Soccer* yet landed in cluster `2` (the NBA-dominated cluster).
-- **Why it drifted:** the MiniLM embedding leans heavily on surface words (“star”, “giants”) shared with NBA headlines. With only 384 dimensions, context cues such as “Angel City” (NWSL) and “WSL” did not outweigh generic athletic terms, so cosine distance pulled it toward the NBA centroid.
-- **Nearest-neighbour influence:** KNN lists Women Soccer and NBA articles with similar phrasing, showing that lexical overlap still traps the model despite normalization.
-- **Visual cues (Regular PCA plot):** The scatter shows overlapping clouds for the two soccer segments; cluster boundaries are fuzzy, making single misassignments expected.
+- **Mismatch rate:** Significantly higher than Gemini (see “Regular Model K-Means clustering results” screenshot). Multiple Women Soccer headlines spilled into the NBA or transfers clusters, and a few transfer stories drifted towards women’s soccer.
+- **Why so many drifts:** the 384-dimension MiniLM vector space is dominated by overlapping lexical cues (“star”, “loan”, “record-breaking”), so cosine similarity groups titles by shared buzzwords rather than league context. Sparse representation of MLS and WSL references makes it difficult for K-Means to form clean boundaries.
+- **Nearest-neighbour influence:** KNN recommends titles from mixed sports segments, reinforcing the confusion—many neighbours for women’s football and NBA stories look interchangeable at the sentence level.
+- **Visual cues (Regular PCA plot):** Clusters bleed into each other, especially between Women Soccer and Soccer Transfers, demonstrating that the embedding manifold itself lacks separation.
 
-**Takeaway:** Conventional embeddings give acceptable accuracy and are lightweight/offline, but subtle domain phrases can overshadow semantic intent, letting K-Means allocate a minority of women’s football stories to the NBA cluster.
+**Takeaway:** The SentenceTransformer baseline is serviceable offline but introduces numerous cluster mis-allocations due to vocabulary overlap, which in turn raises the risk of downstream misclassifications.
 
 ---
 
 ## 2. K-Means with Gemini Embeddings
 
-- **Observed behaviour (per screenshots):** Gemini’s 3,072-dimension vectors separate the three topical regions cleanly—the K-Means summary shows near-zero mismatch between cluster IDs and original groups.
-- **Why Gemini helps:** larger embedding space captures richer semantic relations (club names, league acronyms, player references) and better differentiates women’s football from NBA jargon, so centroids align with the intended topics.
+- **Observed behaviour (per screenshots):** Gemini’s 3,072-dimension embeddings yield nearly perfect alignment—only a single title falls outside its original group, and the rest of the cluster assignments mirror the ground truth.
+- **Why Gemini helps:** the larger, semantically richer embedding space captures league-specific cues (“Angel City”, “Chelsea”, “NBA”) far better, letting K-Means isolate coherent thematic regions.
 - **Dependencies:** requires `google-generativeai` and a valid API key; runs are cloud-dependent and slower due to network latency.
 
 **However, new-title classification diverged:**
@@ -45,8 +44,8 @@ Both flows produced normalized embeddings, K-Means cluster allocations (`k=3`), 
 | --- | --- | --- |
 | **Availability** | Offline, no API key required | Requires network + `google-generativeai` + API key |
 | **Embedding Dimensionality** | 384 | 3072 |
-| **K-Means Alignment** | Small mismatch (1/30) due to lexical overlap | Near-perfect cluster alignment in sample runs |
-| **KNN New Title** | Correctly assigns Messi headline to *Soccer Transfers* (confidence 0.67) | Misclassifies Messi headline to *Women Soccer* (confidence 0.67) due to neighbour imbalance |
+| **K-Means Alignment** | Higher mismatch rate (multiple cross-cluster allocations) due to lexical overlap | Near-perfect cluster alignment (only one mismatch observed) |
+| **KNN New Title** | Correctly assigns Messi headline to *Soccer Transfers* (confidence 0.67) | Misclassifies Messi headline to *Women Soccer* (confidence ~0.67) because nearest neighbours skew female soccer |
 | **Runtime** | Fast, lightweight | Slower per request, subject to API rate limits |
 | **Explainability** | Easier to reason about drift (lexical) | Higher semantic nuance but harder to debug without centroid introspection |
 
@@ -65,4 +64,4 @@ K-Means clustering quality is tightly coupled to the embedding manifold. Better 
 4. **Hybrid approach:** Use Gemini for primary embeddings when connectivity is available; fall back to SentenceTransformer offline, but adjust post-processing (e.g., manual rules for certain leagues) to catch known failure modes.
 5. **Monitor new-title outcomes:** store predicted clusters and nearest neighbours for review, flagging cases where confidence < 0.7 or where neighbour labels disagree to prompt manual checks.
 
-Overall, Gemini embeddings yield superior cluster separation, but KNN classification accuracy remains contingent on balanced, representative training data. Improving data coverage or adjusting voting logic is essential to translate embedding quality into correct real-world routing for new content.
+Overall, Gemini embeddings yield superior cluster separation, but KNN classification accuracy remains contingent on balanced, representative training data. The Messi title misclassification under Gemini highlights that even a high-fidelity embedding space cannot compensate for skewed nearest neighbours. Improving data coverage or adjusting voting logic (e.g., reweighting votes, enriching the transfers cohort) is essential to translate embedding quality into correct real-world routing for new content.
